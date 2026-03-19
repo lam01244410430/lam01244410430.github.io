@@ -30,8 +30,8 @@ def run_bot():
     
     print(f"Bắt đầu cào dữ liệu giá vé cho ngày khởi hành: {target_date_str}\n")
     
-    url = "https://sky-scrapper.p.rapidapi.com/api/v1/flights/getPriceCalendar"
-    headers = {"X-RapidAPI-Key": RAPIDAPI_KEY, "X-RapidAPI-Host": "sky-scrapper.p.rapidapi.com"}
+    url = "https://flights-sky.p.rapidapi.com/flights/search-roundtrip?fromEntityId=PARI"
+    headers = {"X-RapidAPI-Key": RAPIDAPI_KEY, "X-RapidAPI-Host": "flights-sky.p.rapidapi.com"}
     
     # 4. Vòng lặp xử lý từng chặng bay
     for route in ROUTES_TO_TRACK:
