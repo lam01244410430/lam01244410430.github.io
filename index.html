@@ -5,53 +5,147 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Hệ Thống Săn Vé Máy Bay Tự Động</title>
     <style>
-        body { font-family: Arial, sans-serif; margin: 40px; background-color: #f4f4f9; }
-        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        body { font-family: Arial, sans-serif; margin: 40px; background-color: #f4f4f9; color: #333; }
+        .card { background: white; padding: 25px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); max-width: 600px; margin: auto; }
+        .control-group { margin-bottom: 15px; }
+        select, button { padding: 10px; font-size: 16px; border-radius: 4px; border: 1px solid #ccc; width: 100%; margin-top: 5px; box-sizing: border-box; }
+        button { background-color: #007bff; color: white; border: none; cursor: pointer; font-weight: bold; margin-top: 15px; }
+        button:hover { background-color: #0056b3; }
+        #result-box { margin-top: 25px; padding: 15px; background: #f8f9fa; border-radius: 4px; border-left: 4px solid #007bff; }
+        ul { list-style-type: none; padding: 0; }
+        li { padding: 8px 0; border-bottom: 1px dashed #ddd; }
+        li:last-child { border-bottom: none; }
     </style>
 </head>
 <body>
 
     <div class="card">
-        <h1>📊 Thống Kê Giá Vé Rẻ Nhất</h1>
-        <p>Hệ thống tự động cập nhật và phân tích giá vé máy bay.</p>
+        <h1>📊 Thống Kê Giá Vé Máy Bay</h1>
         
-        <button onclick="fetchFlightData()">Tải dữ liệu mới nhất</button>
-        <div id="result-box" style="margin-top: 20px; padding: 10px; background: #eee; border-radius: 4px;">
-            Dữ liệu sẽ hiển thị ở đây...
+        <div class="control-group">
+            <label for="origin">🛫 Điểm đi:</label>
+            <select id="origin" onchange="updateDestinations()">
+                <option value="">Đang tải dữ liệu...</option>
+            </select>
+        </div>
+
+        <div class="control-group">
+            <label for="destination">🛬 Điểm đến:</label>
+            <select id="destination">
+                <option value="">Vui lòng chọn điểm đi trước</option>
+            </select>
+        </div>
+        
+        <button onclick="fetchFlightData()">Tra cứu lịch sử giá</button>
+        
+        <div id="result-box">
+            Vui lòng chọn chặng bay và bấm Tra cứu.
         </div>
     </div>
 
     <script>
-        // Cấu hình Supabase
-        const SUPABASE_URL = 'https://exlpkimftzphcfyzlkfq.supabase.co'; 
-        const SUPABASE_ANON_KEY = 'sb_publishable_JDNoNELyPGwtBozBpDfiMw_GgfGpV-6';
+        // --- 1. CẤU HÌNH API CỦA BẠN Ở ĐÂY ---
+        const SUPABASE_URL = 'YOUR_SUPABASE_URL'; 
+        const SUPABASE_KEY = 'YOUR_SUPABASE_KEY';
 
+        // Biến toàn cục để lưu trữ tất cả các cặp chặng bay đang có trong Database
+        let availableRoutes = [];
+
+        // --- 2. HÀM KHỞI TẠO: Tự động chạy khi mở web ---
+        async function initApp() {
+            try {
+                // Chỉ lấy 2 cột origin và destination để tối ưu hóa tốc độ tải
+                const response = await fetch(`${SUPABASE_URL}/rest/v1/price_history?select=origin,destination`, {
+                    method: 'GET',
+                    headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }
+                });
+                
+                const data = await response.json();
+                
+                if (data.length === 0) {
+                    document.getElementById('origin').innerHTML = '<option value="">Database trống</option>';
+                    return;
+                }
+
+                // Dùng cấu trúc Set để loại bỏ các sân bay trùng lặp (Deduplication)
+                availableRoutes = data;
+                const uniqueOrigins = [...new Set(data.map(item => item.origin))];
+
+                // Đổ dữ liệu vào Dropdown Điểm đi
+                const originSelect = document.getElementById('origin');
+                originSelect.innerHTML = '<option value="">-- Chọn điểm đi --</option>';
+                uniqueOrigins.sort().forEach(origin => {
+                    originSelect.innerHTML += `<option value="${origin}">${origin}</option>`;
+                });
+
+            } catch (error) {
+                console.error("Lỗi khởi tạo:", error);
+                document.getElementById('origin').innerHTML = '<option value="">Lỗi kết nối API</option>';
+            }
+        }
+
+        // --- 3. HÀM CẬP NHẬT ĐIỂM ĐẾN ---
+        // Chạy mỗi khi người dùng thay đổi "Điểm đi"
+        function updateDestinations() {
+            const selectedOrigin = document.getElementById('origin').value;
+            const destSelect = document.getElementById('destination');
+            
+            destSelect.innerHTML = '<option value="">-- Chọn điểm đến --</option>';
+            
+            if (!selectedOrigin) return;
+
+            // Lọc ra các điểm đến tương ứng với điểm đi đã chọn
+            const validDestinations = availableRoutes
+                .filter(route => route.origin === selectedOrigin)
+                .map(route => route.destination);
+                
+            const uniqueDestinations = [...new Set(validDestinations)];
+
+            uniqueDestinations.sort().forEach(dest => {
+                destSelect.innerHTML += `<option value="${dest}">${dest}</option>`;
+            });
+        }
+
+        // --- 4. HÀM TRA CỨU GIÁ VÉ ---
         async function fetchFlightData() {
+            const origin = document.getElementById('origin').value;
+            const destination = document.getElementById('destination').value;
             const resultBox = document.getElementById('result-box');
-            resultBox.innerHTML = "Đang kết nối cơ sở dữ liệu...";
+
+            if (!origin || !destination) {
+                resultBox.innerHTML = "<span style='color:red;'>Vui lòng chọn đầy đủ Điểm đi và Điểm đến!</span>";
+                return;
+            }
+
+            resultBox.innerHTML = "Đang lấy dữ liệu...";
 
             try {
-                // Gọi REST API của Supabase để lấy bảng price_history
-                const response = await fetch(`${SUPABASE_URL}/rest/v1/price_history?select=*&order=scraped_at.desc&limit=5`, {
+                // Query Database: Lọc theo origin VÀ destination, sắp xếp theo thời gian mới nhất
+                const queryParams = `select=*&origin=eq.${origin}&destination=eq.${destination}&order=scraped_at.desc&limit=10`;
+                const response = await fetch(`${SUPABASE_URL}/rest/v1/price_history?${queryParams}`, {
                     method: 'GET',
-                    headers: {
-                        'apikey': SUPABASE_ANON_KEY,
-                        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-                        'Content-Type': 'application/json'
-                    }
+                    headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }
                 });
 
                 const data = await response.json();
                 
                 if (data.length === 0) {
-                    resultBox.innerHTML = "Database hiện đang trống. Cần chạy Bot để nạp dữ liệu!";
+                    resultBox.innerHTML = "Không có lịch sử giá cho chặng bay này.";
                     return;
                 }
 
-                // In dữ liệu ra màn hình
                 let htmlContent = "<ul>";
                 data.forEach(flight => {
-                    htmlContent += `<li>🛫 ${flight.origin} ➡️ ${flight.destination} (Ngày bay: ${flight.departure_date}) - <b>${flight.total_price_vnd} VND</b></li>`;
+                    const dateObj = new Date(flight.scraped_at);
+                    const formattedDate = dateObj.toLocaleString('vi-VN');
+                    // Format tiền tệ dễ nhìn hơn
+                    const formattedPrice = Number(flight.total_price_vnd).toLocaleString('vi-VN');
+                    
+                    htmlContent += `<li>
+                        📅 Ngày cào: ${formattedDate} <br>
+                        ✈️ Khởi hành: <b>${flight.departure_date}</b> <br>
+                        💰 Giá: <b style="color: green; font-size: 1.1em;">${formattedPrice} VND</b>
+                    </li>`;
                 });
                 htmlContent += "</ul>";
                 
@@ -62,6 +156,9 @@
                 resultBox.innerHTML = "Lỗi kết nối: " + error.message;
             }
         }
+
+        // Chạy hàm khởi tạo ngay khi trang load xong
+        window.onload = initApp;
     </script>
 </body>
 </html>
