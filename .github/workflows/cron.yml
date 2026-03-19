@@ -1,0 +1,21 @@
+name: Bot Cao Gia Ve
+on:
+  schedule:
+    - cron: '0 0 * * *' # Chạy mỗi ngày vào lúc 0h UTC
+  workflow_dispatch:    # Nút bấm chạy bằng tay
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - run: pip install -r requirements.txt
+      - name: Chay Script
+        env:
+          RAPIDAPI_KEY: ${{ secrets.RAPIDAPI_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: python bot.py
